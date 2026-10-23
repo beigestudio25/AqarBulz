@@ -9,6 +9,7 @@ import {
 } from "@/utils/supabase/server";
 import { hasAdminPermission } from "@/lib/auth/admin-permissions";
 import { applyApprovedPublisherRole } from "@/lib/services/publisher-role";
+import { buildProjectAdminAuditEntry } from "@/lib/services/admin-project-fields";
 
 export async function GET(req: Request) {
   try {
@@ -105,54 +106,40 @@ export async function POST(req: Request) {
 
     if (decision === "delete") {
       const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(propertyId);
-      const supabase = createAdminClient();
-      if (isUuid) {
-        const { data: property, error: propertyError } = await supabase
-          .from("properties")
-          .select("title, advertiser_id, user_id, owner_id")
-          .eq("id", propertyId)
-          .maybeSingle();
-        if (propertyError) {
-          return NextResponse.json({ error: `تعذر جلب بيانات العقار قبل حذفه: ${propertyError.message}` }, { status: 500 });
+      const localProject = dbStore.getRawPropertyById(propertyId);
+      let deletedProject: any = localProject;
+      if (isUuid && isSupabaseDirect()) {
+        const supabaseAdmin = createAdminClient();
+        const { data, error } = await supabaseAdmin.rpc("admin_delete_project_with_audit", {
+          p_project_id: propertyId,
+          p_actor_user_id: user.id,
+          p_actor_name: user.name,
+          p_actor_email: user.email ?? null,
+          p_actor_role: user.adminRole ?? user.role,
+        });
+        if (error || !data) {
+          return NextResponse.json({
+            error: `تعذر حذف المشروع أو تسجيل العملية: ${error?.message || "المشروع غير موجود"}`,
+          }, { status: 500 });
         }
-
-        if (property) {
-          const advertiserId = property.advertiser_id || property.user_id || property.owner_id;
-          const { error: inquirySnapshotError } = await supabase
-            .from("inquiries")
-            .update({
-              property_title: property.title,
-              ...(advertiserId ? { advertiser_id: advertiserId } : {}),
-            })
-            .eq("property_id", propertyId);
-          if (inquirySnapshotError) {
-            return NextResponse.json(
-              { error: `تعذر حفظ المحادثات المرتبطة بالعقار قبل حذفه: ${inquirySnapshotError.message}` },
-              { status: 500 }
-            );
-          }
-
-          const { error: imageDeleteError } = await supabase
-            .from("property_images")
-            .delete()
-            .eq("property_id", propertyId);
-          if (imageDeleteError) {
-            return NextResponse.json({ error: `تعذر حذف صور العقار: ${imageDeleteError.message}` }, { status: 500 });
-          }
-          const { error: propertyDeleteError } = await supabase
-            .from("properties")
-            .delete()
-            .eq("id", propertyId);
-          if (propertyDeleteError) {
-            return NextResponse.json({ error: `تعذر حذف العقار: ${propertyDeleteError.message}` }, { status: 500 });
-          }
-        }
+        deletedProject = {
+          id: data.id,
+          title: data.title,
+          slug: data.slug,
+          isProject: localProject?.isProject,
+          advertiserId: localProject?.advertiserId,
+          projectDetails: localProject?.projectDetails,
+        };
       }
       propertyService.recordModerationOverride(propertyId, { deleted: true });
       try {
         dbStore.deleteProperty(propertyId, user);
       } catch {}
       dbStore.recordAuditEvent(user.id, "ADMIN_DELETE_PROPERTY", "property", propertyId, { reason, adminEmail: user.email });
+      if (deletedProject?.id && deletedProject?.title) {
+        const auditEntry = buildProjectAdminAuditEntry("deleted", deletedProject, user);
+        dbStore.recordAuditEvent(user.id, "ADMIN_PROJECT_DELETED", "property", propertyId, auditEntry);
+      }
       return NextResponse.json({ success: true, message: "تم حذف المنشور من قبل الإدارة بنجاح" });
     }
 
@@ -234,41 +221,50 @@ export async function POST(req: Request) {
 
     let updatedCloudRecord: any = null;
     if (isUuid && useCloud) {
-      const nowIso = new Date().toISOString();
-      const { data: cloudUpdated, error: supaModErr } = await supabase
-        .from("properties")
-        .update({
-          status: targetStatus,
-          moderation_notes: reason || null,
-          approved_at: targetStatus === "active" ? nowIso : null,
-          published_at: targetStatus === "active" ? nowIso : null,
-          moderated_at: nowIso,
-          updated_at: nowIso,
-        })
-        .eq("id", propertyId)
-        .select()
-        .single();
-
-      if (!supaModErr && cloudUpdated) {
-        updatedCloudRecord = cloudUpdated;
-      } else {
-        // High-reliability fallback using dedicated RPC
-        if (decision === "approve") {
-          const { data: rpcRes, error: rpcErr } = await supabase.rpc("admin_approve_property", {
-            p_property_id: propertyId,
-            p_notes: reason || null,
-          });
-          if (!rpcErr && (rpcRes?.success || rpcRes?.id)) {
-            const { data: reloaded } = await supabase.from("properties").select("*").eq("id", propertyId).single();
-            if (reloaded) updatedCloudRecord = reloaded;
+      if (decision === "approve") {
+        const supabaseAdmin = createAdminClient();
+        const { data: published, error: publishError } = await supabaseAdmin.rpc(
+          "admin_publish_project_with_audit",
+          {
+            p_project_id: propertyId,
+            p_actor_user_id: user.id,
+            p_actor_name: user.name,
+            p_actor_email: user.email ?? null,
+            p_actor_role: user.adminRole ?? user.role,
+            p_notes: reason ?? null,
           }
-        }
-      }
-      if (!updatedCloudRecord) {
-        return NextResponse.json(
-          { error: `تعذر حفظ قرار المراجعة: ${supaModErr?.message || "لم يتم تحديث سجل العقار"}` },
-          { status: 500 }
         );
+        if (publishError || !published) {
+          return NextResponse.json(
+            { error: `تعذر اعتماد المشروع أو تسجيل العملية: ${publishError?.message || "المشروع غير موجود"}` },
+            { status: 500 }
+          );
+        }
+        updatedCloudRecord = published;
+      } else {
+        const nowIso = new Date().toISOString();
+        const { data: cloudUpdated, error: supaModErr } = await supabase
+          .from("properties")
+          .update({
+            status: targetStatus,
+            moderation_notes: reason || null,
+            approved_at: null,
+            published_at: null,
+            moderated_at: nowIso,
+            updated_at: nowIso,
+          })
+          .eq("id", propertyId)
+          .select()
+          .single();
+
+        if (!supaModErr && cloudUpdated) {
+          updatedCloudRecord = cloudUpdated;
+        } else {
+          return NextResponse.json(
+            { error: `تعذر حفظ قرار المراجعة: ${supaModErr?.message || "لم يتم تحديث سجل العقار"}` },
+            { status: 500 }
+          );
+        }
       }
     }
 
@@ -305,6 +301,23 @@ export async function POST(req: Request) {
       reason,
       adminEmail: user.email,
     });
+    if (decision === "approve" && (updatedCloudRecord || updatedLocalRecord)) {
+      const approvedProject = updatedLocalRecord || {
+        id: propertyId,
+        title: updatedCloudRecord.title,
+        slug: updatedCloudRecord.slug,
+        isProject: updatedCloudRecord.is_project,
+        advertiserId: updatedCloudRecord.advertiser_id,
+        projectDetails: updatedCloudRecord.project_details,
+      };
+      dbStore.recordAuditEvent(
+        user.id,
+        "ADMIN_PROJECT_APPROVED_PUBLISHED",
+        "property",
+        propertyId,
+        buildProjectAdminAuditEntry("approved_published", approvedProject, user)
+      );
+    }
 
     return NextResponse.json({
       success: true,

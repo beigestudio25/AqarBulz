@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import NextImage from "next/image";
 import {
@@ -418,33 +419,42 @@ export default function AdminCmsTab() {
           </p>
         </div>
 
-        <button
-          type="submit"
-          disabled={saving || loading || loadError || uploadingLogo || uploadingAppIcon}
-          className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-purple-700 hover:bg-purple-800 disabled:opacity-50 text-white text-xs font-black transition-all shadow-md shadow-purple-700/20 cursor-pointer self-start md:self-auto"
-        >
-          {saving ? (
-            <>
-              <RefreshCw className="w-4 h-4 animate-spin" />
-              <span>جاري الحفظ والاعتماد...</span>
-            </>
-          ) : (
-            <>
-              <Save className="w-4 h-4" />
-              <span>حفظ التعديلات فوراً</span>
-            </>
-          )}
-        </button>
-        {loadError && (
-          <button
-            type="button"
-            onClick={() => void fetchCmsSettings()}
-            className="inline-flex items-center gap-2 px-4 py-3 rounded-xl border border-slate-200 text-slate-700 text-xs font-bold"
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href="/admin?tab=cms"
+            className="inline-flex items-center gap-2 rounded-xl border border-brand-200 px-4 py-3 text-xs font-black text-brand-800 transition-colors hover:bg-brand-50"
           >
-            <RefreshCw className="w-4 h-4" />
-            إعادة تحميل الإعدادات
+            <Palette className="h-4 w-4" />
+            صفحة الهوية المعاد بناؤها
+          </Link>
+          <button
+            type="submit"
+            disabled={saving || loading || loadError || uploadingLogo || uploadingAppIcon}
+            className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-purple-700 hover:bg-purple-800 disabled:opacity-50 text-white text-xs font-black transition-all shadow-md shadow-purple-700/20 cursor-pointer self-start md:self-auto"
+          >
+            {saving ? (
+              <>
+                <RefreshCw className="w-4 h-4 animate-spin" />
+                <span>جاري الحفظ والاعتماد...</span>
+              </>
+            ) : (
+              <>
+                <Save className="w-4 h-4" />
+                <span>حفظ التعديلات فوراً</span>
+              </>
+            )}
           </button>
-        )}
+          {loadError && (
+            <button
+              type="button"
+              onClick={() => void fetchCmsSettings()}
+              className="inline-flex items-center gap-2 px-4 py-3 rounded-xl border border-slate-200 text-slate-700 text-xs font-bold"
+            >
+              <RefreshCw className="w-4 h-4" />
+              إعادة تحميل الإعدادات
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Success / Error notification */}

@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { apiFetch } from "@/lib/apiClient";
-import { CATEGORY_LABELS_AR } from "@/lib/db/types";
+import { CATEGORY_LABELS_AR, type Property } from "@/lib/db/types";
 import {
   Building2,
   CheckCircle2,
@@ -26,13 +26,10 @@ import {
   ChevronDown,
 } from "lucide-react";
 
-export interface PropertyItem {
+export type PropertyItem = Partial<Omit<Property, "status" | "category" | "transactionType">> & {
   id: string;
   title: string;
-  slug?: string;
-  description?: string;
-  status: "pending_review" | "pending" | "under_review" | "published" | "active" | "rejected" | "suspended" | "draft" | "sold" | "rented" | string;
-  price: number;
+  status: string;
   category: string;
   transactionType: string;
   cityId?: string;
@@ -48,9 +45,34 @@ export interface PropertyItem {
   createdAt?: string;
   updatedAt?: string;
   publishedAt?: string;
-}
+};
 
 type ProjectSection = "all" | "pending" | "active" | "sold" | "rejected";
+
+const PROJECT_EDIT_TEXT_FIELDS: Array<[string, string]> = [
+  ["title", "عنوان المشروع"],
+  ["slug", "الرابط المختصر"],
+  ["currency", "العملة"],
+  ["cityId", "معرف المدينة"],
+  ["districtId", "معرف المنطقة"],
+  ["addressDetails", "العنوان التفصيلي"],
+];
+const PROJECT_EDIT_NUMBER_FIELDS: Array<[string, string, string?]> = [
+  ["price", "السعر", "0.01"],
+  ["downPayment", "مقدم الحجز"],
+  ["installmentYears", "سنوات التقسيط"],
+  ["areaSqM", "المساحة (م²)", "0.01"],
+  ["bedrooms", "غرف النوم"],
+  ["bathrooms", "الحمامات"],
+  ["floor", "الطابق"],
+  ["totalFloors", "عدد الطوابق"],
+  ["parkingSpots", "أماكن الانتظار"],
+  ["yearBuilt", "سنة البناء"],
+  ["lat", "خط العرض"],
+  ["lng", "خط الطول"],
+  ["approximateLat", "خط العرض التقريبي"],
+  ["approximateLng", "خط الطول التقريبي"],
+];
 
 export default function AdminProjectsTab({
   canReview = true,
@@ -116,22 +138,38 @@ export default function AdminProjectsTab({
   const [editModal, setEditModal] = useState<{
     open: boolean;
     property: PropertyItem | null;
-    title: string;
-    price: number | string;
-    category: string;
-    transactionType: string;
-    description: string;
+    values: Record<string, unknown>;
   }>({
     open: false,
     property: null,
-    title: "",
-    price: 0,
-    category: "apartment",
-    transactionType: "sale",
-    description: "",
+    values: {},
   });
 
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  const openEditModal = (property: PropertyItem) => {
+    setEditModal({
+      open: true,
+      property,
+      values: {
+        ...property,
+        areaSqM: property.areaSqM ?? "",
+        bedrooms: property.bedrooms ?? "",
+        bathrooms: property.bathrooms ?? "",
+        floor: property.floor ?? "",
+        totalFloors: property.totalFloors ?? "",
+        parkingSpots: property.parkingSpots ?? "",
+        yearBuilt: property.yearBuilt ?? "",
+        downPayment: property.downPayment ?? "",
+        installmentYears: property.installmentYears ?? "",
+        approximateLat: property.approximateLat ?? "",
+        approximateLng: property.approximateLng ?? "",
+        amenities: (property.amenities || []).join("\n"),
+        images: (property.images || []).join("\n"),
+        projectDetails: JSON.stringify(property.projectDetails || {}, null, 2),
+      },
+    });
+  };
 
   const fetchProperties = async () => {
     setLoading(true);
@@ -411,6 +449,41 @@ export default function AdminProjectsTab({
   const handleSaveEdit = async () => {
     if (!editModal.property) return;
     const propId = editModal.property.id;
+    let projectDetails: unknown;
+    try {
+      projectDetails = typeof editModal.values.projectDetails === "string"
+        ? JSON.parse(editModal.values.projectDetails)
+        : editModal.values.projectDetails;
+    } catch {
+      setFeedback({ type: "error", text: "صيغة تفاصيل المشروع غير صالحة. تحقق من JSON." });
+      return;
+    }
+    const numericFields = [
+      "price", "downPayment", "installmentYears", "areaSqM", "bedrooms", "bathrooms",
+      "floor", "totalFloors", "parkingSpots", "yearBuilt", "lat", "lng",
+      "approximateLat", "approximateLng",
+    ];
+    const fields: Record<string, unknown> = {
+      ...editModal.values,
+      projectDetails,
+      amenities: String(editModal.values.amenities || "").split("\n").map((value) => value.trim()).filter(Boolean),
+      images: String(editModal.values.images || "").split("\n").map((value) => value.trim()).filter(Boolean),
+    };
+    for (const field of numericFields) {
+      const value = fields[field];
+      fields[field] = value === "" || value === undefined ? null : Number(value);
+    }
+    delete fields.id;
+    delete fields.advertiserId;
+    delete fields.userId;
+    delete fields.advertiserType;
+    delete fields.createdAt;
+    delete fields.updatedAt;
+    delete fields.publishedAt;
+    delete fields.status;
+    delete fields.featured;
+    delete fields.viewsCount;
+    delete fields.inquiriesCount;
     setActionLoading(propId);
     try {
       const res = await apiFetch("/api/admin/properties", {
@@ -418,11 +491,7 @@ export default function AdminProjectsTab({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           propertyId: propId,
-          title: editModal.title,
-          price: Number(editModal.price),
-          category: editModal.category,
-          transactionType: editModal.transactionType,
-          description: editModal.description,
+          ...fields,
         }),
       });
       if (res.ok) {
@@ -430,32 +499,14 @@ export default function AdminProjectsTab({
         setProperties((prev) =>
           prev.map((p) =>
             p.id === propId
-              ? {
-                  ...p,
-                  title: editModal.title,
-                  price: Number(editModal.price),
-                  category: editModal.category,
-                  transactionType: editModal.transactionType,
-                  description: editModal.description,
-                }
+              ? { ...p, ...fields }
               : p
           )
         );
         if (selectedProject?.id === propId) {
-          setSelectedProject((prev) =>
-            prev
-              ? {
-                  ...prev,
-                  title: editModal.title,
-                  price: Number(editModal.price),
-                  category: editModal.category,
-                  transactionType: editModal.transactionType,
-                  description: editModal.description,
-                }
-              : null
-          );
+          setSelectedProject((prev) => prev ? { ...prev, ...fields } : null);
         }
-        setEditModal({ open: false, property: null, title: "", price: 0, category: "", transactionType: "", description: "" });
+        setEditModal({ open: false, property: null, values: {} });
       } else {
         const d = await res.json();
         setFeedback({ type: "error", text: d.error || "فشل حفظ التعديلات" });
@@ -466,6 +517,9 @@ export default function AdminProjectsTab({
       setActionLoading(null);
     }
   };
+
+  const setEditValue = (field: string, value: unknown) =>
+    setEditModal((current) => ({ ...current, values: { ...current.values, [field]: value } }));
 
   // Counters
   const countAll = properties.length;
@@ -942,17 +996,7 @@ export default function AdminProjectsTab({
                       {/* زر تعديل المشروع */}
                       <button
                         type="button"
-                        onClick={() =>
-                          setEditModal({
-                            open: true,
-                            property: prop,
-                            title: prop.title,
-                            price: prop.price || 0,
-                            category: prop.category || "apartment",
-                            transactionType: prop.transactionType || "sale",
-                            description: prop.description || "",
-                          })
-                        }
+                        onClick={() => openEditModal(prop)}
                         disabled={actionLoading === prop.id}
                         className="p-2 sm:px-2.5 sm:py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors flex items-center gap-1 cursor-pointer"
                         title="تعديل بيانات المشروع"
@@ -1078,17 +1122,7 @@ export default function AdminProjectsTab({
 
                       <button
                         type="button"
-                        onClick={() =>
-                          setEditModal({
-                            open: true,
-                            property: prop,
-                            title: prop.title,
-                            price: prop.price || 0,
-                            category: prop.category || "apartment",
-                            transactionType: prop.transactionType || "sale",
-                            description: prop.description || "",
-                          })
-                        }
+                        onClick={() => openEditModal(prop)}
                         disabled={actionLoading === prop.id}
                         className="p-2 sm:px-2.5 sm:py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors flex items-center gap-1 cursor-pointer"
                         title="تعديل بيانات المشروع"
@@ -1354,7 +1388,7 @@ export default function AdminProjectsTab({
          ======================================================== */}
       {editModal.open && editModal.property && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 space-y-4 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 duration-150 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-3xl w-full p-6 space-y-4 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 duration-150 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-800 flex items-center justify-center">
                 <Edit3 className="w-5 h-5" />
@@ -1365,77 +1399,105 @@ export default function AdminProjectsTab({
               </div>
             </div>
 
-            <div className="space-y-3 text-xs">
-              <div>
-                <label className="block text-[11px] font-bold text-slate-700 mb-1">عنوان المشروع:</label>
-                <input
-                  type="text"
-                  value={editModal.title}
-                  onChange={(e) => setEditModal({ ...editModal, title: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white"
-                />
-              </div>
+            <div className="grid grid-cols-1 gap-3 text-xs sm:grid-cols-2">
+              {PROJECT_EDIT_TEXT_FIELDS.map(([field, label]) => (
+                <label key={field} className="block">
+                  <span className="mb-1 block text-[11px] font-bold text-slate-700">{label}:</span>
+                  <input
+                    type="text"
+                    value={String(editModal.values[field] ?? "")}
+                    onChange={(event) => setEditValue(field, event.target.value)}
+                    className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </label>
+              ))}
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">السعر (ج.م):</label>
+              <label className="block">
+                <span className="mb-1 block text-[11px] font-bold text-slate-700">نوع المعاملة:</span>
+                <select value={String(editModal.values.transactionType ?? "sale")} onChange={(event) => setEditValue("transactionType", event.target.value)} className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-800">
+                  <option value="sale">بيع</option><option value="rent">إيجار</option>
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-[11px] font-bold text-slate-700">التصنيف:</span>
+                <select value={String(editModal.values.category ?? "apartment")} onChange={(event) => setEditValue("category", event.target.value)} className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-800">
+                  {Object.entries(CATEGORY_LABELS_AR).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-[11px] font-bold text-slate-700">فترة الإيجار:</span>
+                <select value={String(editModal.values.rentalPeriod ?? "")} onChange={(event) => setEditValue("rentalPeriod", event.target.value || null)} className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-800">
+                  <option value="">غير محددة</option><option value="monthly">شهري</option><option value="yearly">سنوي</option><option value="daily">يومي</option>
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-[11px] font-bold text-slate-700">حالة الموقع:</span>
+                <select value={String(editModal.values.locationPrivacy ?? "exact")} onChange={(event) => setEditValue("locationPrivacy", event.target.value)} className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-800">
+                  <option value="exact">دقيق</option><option value="approximate">تقريبي</option>
+                </select>
+              </label>
+
+              {PROJECT_EDIT_NUMBER_FIELDS.map(([field, label, min]) => (
+                <label key={field} className="block">
+                  <span className="mb-1 block text-[11px] font-bold text-slate-700">{label}:</span>
                   <input
                     type="number"
-                    min={1}
-                    max={100_000_000}
-                    value={editModal.price}
-                    onChange={(e) =>
-                      setEditModal({
-                        ...editModal,
-                        price: e.target.value
-                          ? Math.min(100_000_000, Math.max(1, Number(e.target.value)))
-                          : "",
-                      })
-                    }
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white"
+                    min={min}
+                    step={field === "lat" || field === "lng" || field === "approximateLat" || field === "approximateLng" ? "any" : "1"}
+                    value={String(editModal.values[field] ?? "")}
+                    onChange={(event) => setEditValue(field, event.target.value)}
+                    className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   />
-                </div>
+                </label>
+              ))}
 
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">نوع المعاملة:</label>
-                  <select
-                    value={editModal.transactionType}
-                    onChange={(e) => setEditModal({ ...editModal, transactionType: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white"
-                  >
-                    <option value="sale">بيع</option>
-                    <option value="rent">إيجار</option>
-                    <option value="investment">استثمار</option>
-                  </select>
-                </div>
-              </div>
+              {[
+                ["negotiable", "السعر قابل للتفاوض"],
+                ["hasElevator", "يوجد مصعد"],
+                ["hasBuildingPermit", "يوجد ترخيص بناء"],
+                ["isProject", "تسجيل كسجل مشروع/كمبوند"],
+              ].map(([field, label]) => (
+                <label key={field} className="flex items-center gap-2 rounded-xl border border-slate-200 p-3 font-bold text-slate-700">
+                  <input type="checkbox" checked={Boolean(editModal.values[field])} onChange={(event) => setEditValue(field, event.target.checked)} />
+                  {label}
+                </label>
+              ))}
 
-              <div>
-                <label className="block text-[11px] font-bold text-slate-700 mb-1">التصنيف:</label>
-                <input
-                  type="text"
-                  value={editModal.category}
-                  onChange={(e) => setEditModal({ ...editModal, category: e.target.value })}
-                  placeholder="apartment, villa, land..."
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white"
-                />
-              </div>
+              <label className="block">
+                <span className="mb-1 block text-[11px] font-bold text-slate-700">التشطيب:</span>
+                <select value={String(editModal.values.finishingStatus ?? "")} onChange={(event) => setEditValue("finishingStatus", event.target.value || null)} className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-800">
+                  <option value="">غير محدد</option><option value="core_and_shell">على الطوب</option><option value="semi_finished">نصف تشطيب</option><option value="fully_finished">تشطيب كامل</option><option value="ultra_lux">فائق الفخامة</option>
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-[11px] font-bold text-slate-700">التأثيث:</span>
+                <select value={String(editModal.values.furnishingStatus ?? "")} onChange={(event) => setEditValue("furnishingStatus", event.target.value || null)} className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-800">
+                  <option value="">غير محدد</option><option value="unfurnished">غير مفروش</option><option value="semi_furnished">نصف مفروش</option><option value="furnished">مفروش</option>
+                </select>
+              </label>
 
-              <div>
-                <label className="block text-[11px] font-bold text-slate-700 mb-1">الوصف:</label>
-                <textarea
-                  value={editModal.description}
-                  onChange={(e) => setEditModal({ ...editModal, description: e.target.value })}
-                  rows={4}
-                  className="w-full p-3 bg-slate-50 border border-slate-300 rounded-xl text-xs font-normal text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white"
-                />
-              </div>
+              <label className="block sm:col-span-2">
+                <span className="mb-1 block text-[11px] font-bold text-slate-700">الوصف:</span>
+                <textarea value={String(editModal.values.description ?? "")} onChange={(event) => setEditValue("description", event.target.value)} rows={4} className="w-full rounded-xl border border-slate-300 bg-slate-50 p-3 text-xs text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+              </label>
+              <label className="block sm:col-span-2">
+                <span className="mb-1 block text-[11px] font-bold text-slate-700">المرافق (عنصر لكل سطر):</span>
+                <textarea value={String(editModal.values.amenities ?? "")} onChange={(event) => setEditValue("amenities", event.target.value)} rows={3} className="w-full rounded-xl border border-slate-300 bg-slate-50 p-3 text-xs text-slate-800" />
+              </label>
+              <label className="block sm:col-span-2">
+                <span className="mb-1 block text-[11px] font-bold text-slate-700">روابط الصور (رابط لكل سطر):</span>
+                <textarea value={String(editModal.values.images ?? "")} onChange={(event) => setEditValue("images", event.target.value)} rows={3} className="w-full rounded-xl border border-slate-300 bg-slate-50 p-3 text-xs text-slate-800" />
+              </label>
+              <label className="block sm:col-span-2">
+                <span className="mb-1 block text-[11px] font-bold text-slate-700">تفاصيل المشروع (JSON):</span>
+                <textarea value={String(editModal.values.projectDetails ?? "{}")} onChange={(event) => setEditValue("projectDetails", event.target.value)} rows={8} dir="ltr" className="w-full rounded-xl border border-slate-300 bg-slate-50 p-3 font-mono text-xs text-slate-800" />
+              </label>
             </div>
 
             <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
               <button
                 type="button"
-                onClick={() => setEditModal({ open: false, property: null, title: "", price: 0, category: "", transactionType: "", description: "" })}
+                onClick={() => setEditModal({ open: false, property: null, values: {} })}
                 className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold cursor-pointer"
               >
                 إلغاء
@@ -1443,7 +1505,7 @@ export default function AdminProjectsTab({
               <button
                 type="button"
                 onClick={handleSaveEdit}
-                disabled={actionLoading === editModal.property.id || !editModal.title.trim()}
+                disabled={actionLoading === editModal.property.id || !String(editModal.values.title || "").trim()}
                 className="px-5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white text-xs font-black cursor-pointer shadow-md"
               >
                 حفظ التعديلات

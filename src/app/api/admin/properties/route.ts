@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { propertyService } from "@/lib/services/propertyService";
 import { hasAdminPermission } from "@/lib/auth/admin-permissions";
 import { applyApprovedPublisherRole } from "@/lib/services/publisher-role";
+import { ADMIN_PROJECT_FIELD_COLUMNS, validateAdminProjectFields } from "@/lib/services/admin-project-fields";
 
 export async function GET(req: Request) {
   try {
@@ -148,20 +149,30 @@ export async function PATCH(req: Request) {
     }
 
     const body = await req.json();
-    const { propertyId, status, featured, title, price, description, category, transactionType, moderationNotes } = body;
+    const { propertyId, status, featured, moderationNotes } = body;
 
-    if (!propertyId) {
+    if (typeof propertyId !== "string" || !propertyId.trim()) {
       return NextResponse.json({ error: "معرف العقار مطلوب" }, { status: 400 });
     }
-    if (price !== undefined) {
-      const numericPrice = Number(price);
-      if (!Number.isFinite(numericPrice) || numericPrice < 1 || numericPrice > 100_000_000) {
-        return NextResponse.json(
-          { error: "يجب أن يكون سعر العقار بين 1 و100 مليون جنيه مصري" },
-          { status: 400 }
-        );
-      }
+    if (status !== undefined && ![
+      "draft", "pending", "pending_review", "under_review", "active", "published",
+      "rejected", "suspended", "paused", "sold", "rented", "archived",
+    ].includes(status)) {
+      return NextResponse.json({ error: "حالة المشروع غير صالحة" }, { status: 400 });
     }
+    if (featured !== undefined && typeof featured !== "boolean") {
+      return NextResponse.json({ error: "قيمة التمييز غير صالحة" }, { status: 400 });
+    }
+    if (moderationNotes !== undefined && moderationNotes !== null &&
+        (typeof moderationNotes !== "string" || moderationNotes.length > 5000)) {
+      return NextResponse.json({ error: "ملاحظات الإشراف غير صالحة" }, { status: 400 });
+    }
+
+    const projectEdit = validateAdminProjectFields(body);
+    if (projectEdit.error) {
+      return NextResponse.json({ error: projectEdit.error }, { status: 400 });
+    }
+    const editFields = projectEdit.updates;
 
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(propertyId);
     const { createClient: createSupabaseServerClient } = await import("@/utils/supabase/server");
@@ -177,7 +188,7 @@ export async function PATCH(req: Request) {
       updates.featured = featured;
     }
     if (status) {
-      updates.status = status;
+      if (status !== "active" && status !== "published") updates.status = status;
       if (status === "active" || status === "published") {
         updates.approved_at = nowIso;
         updates.published_at = nowIso;
@@ -187,23 +198,56 @@ export async function PATCH(req: Request) {
     if (moderationNotes !== undefined) {
       updates.moderation_notes = moderationNotes;
     }
-    if (title) updates.title = title;
-    if (price !== undefined) updates.price = Number(price);
-    if (description !== undefined) updates.description = description;
-    if (category) updates.category = category;
-    if (transactionType) updates.transaction_type = transactionType;
+    for (const [field, column] of Object.entries(ADMIN_PROJECT_FIELD_COLUMNS)) {
+      if (!Object.prototype.hasOwnProperty.call(editFields, field)) continue;
+      const value = (editFields as Record<string, unknown>)[field];
+      updates[column] = value;
+      if (field === "lat") updates.latitude = value;
+      if (field === "lng") updates.longitude = value;
+    }
 
     let cloudUpdated = null;
     if (isUuid) {
+      const isPublishing = status === "active" || status === "published";
+      const nonStatusUpdates = { ...updates };
+      if (isPublishing) {
+        delete nonStatusUpdates.approved_at;
+        delete nonStatusUpdates.published_at;
+        delete nonStatusUpdates.moderated_at;
+      }
       const { data, error } = await supabase
         .from("properties")
-        .update(updates)
+        .update(nonStatusUpdates)
         .eq("id", propertyId)
         .select()
         .single();
 
       if (!error && data) {
         cloudUpdated = data;
+      } else {
+        return NextResponse.json({ error: `تعذر تحديث المشروع: ${error?.message || "المشروع غير موجود"}` }, { status: 500 });
+      }
+
+      if (isPublishing) {
+        const { createAdminClient } = await import("@/utils/supabase/server");
+        const adminClient = createAdminClient();
+        const { data: published, error: publishError } = await adminClient.rpc(
+          "admin_publish_project_with_audit",
+          {
+            p_project_id: propertyId,
+            p_actor_user_id: user.id,
+            p_actor_name: user.name,
+            p_actor_email: user.email ?? null,
+            p_actor_role: user.adminRole ?? user.role,
+            p_notes: moderationNotes ?? null,
+          }
+        );
+        if (publishError || !published) {
+          return NextResponse.json({
+            error: `تعذر حفظ اعتماد المشروع في سجل التدقيق: ${publishError?.message || "المشروع غير موجود"}`,
+          }, { status: 500 });
+        }
+        cloudUpdated = published;
       }
     }
 
@@ -214,8 +258,20 @@ export async function PATCH(req: Request) {
     });
 
     try {
+      if (Object.keys(editFields).length > 0) {
+        dbStore.updateProperty(propertyId, editFields, user);
+      }
       if (status) {
-        dbStore.updatePropertyStatus(propertyId, status, user, moderationNotes);
+        const localUpdated = dbStore.updatePropertyStatus(propertyId, status, user, moderationNotes);
+        if (status === "active" || status === "published") {
+          dbStore.recordAuditEvent(user.id, "ADMIN_PROJECT_APPROVED_PUBLISHED", "property", propertyId, {
+            projectId: localUpdated.id,
+            projectTitle: localUpdated.title,
+            projectSlug: localUpdated.slug,
+            actorName: user.name,
+            actorEmail: user.email,
+          });
+        }
       }
     } catch {
       // Local store may not have this cloud ID

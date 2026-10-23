@@ -76,7 +76,7 @@ button, a, input, select, textarea {
   margin-top: -6px;
   border: 2px solid white;
   border-radius: 9999px;
-  background: #047857;
+  background: rgb(var(--brand-800));
   box-shadow: 0 1px 4px rgb(15 23 42 / 35%);
   pointer-events: auto;
   cursor: grab;
@@ -87,7 +87,7 @@ button, a, input, select, textarea {
   height: 14px;
   border: 2px solid white;
   border-radius: 9999px;
-  background: #047857;
+  background: rgb(var(--brand-800));
   box-shadow: 0 1px 4px rgb(15 23 42 / 35%);
   pointer-events: auto;
   cursor: grab;
@@ -188,7 +188,7 @@ button, a, input, select, textarea {
 }
 
 .modern-price-pin .pill-badge {
-  background: #047857; /* brand dark emerald */
+  background: rgb(var(--brand-800));
   color: #ffffff;
   font-family: inherit;
   font-weight: 800;
@@ -201,7 +201,7 @@ button, a, input, select, textarea {
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 4px rgba(4, 120, 87, 0.25);
+  box-shadow: 0 2px 4px rgb(var(--brand-800) / 25%);
   transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 
@@ -238,7 +238,7 @@ button, a, input, select, textarea {
   height: 0;
   border-left: 4.5px solid transparent;
   border-right: 4.5px solid transparent;
-  border-top: 5.5px solid #047857;
+  border-top: 5.5px solid rgb(var(--brand-800));
   margin-top: -1px;
   transition: border-top-color 0.2s ease;
 }
@@ -246,24 +246,24 @@ button, a, input, select, textarea {
 .modern-price-pin:hover,
 .modern-price-pin.active {
   transform: scale(1.15) translateY(-3px);
-  filter: drop-shadow(0 8px 14px rgba(4, 120, 87, 0.45));
+  filter: drop-shadow(0 8px 14px rgb(var(--brand-800) / 45%));
   z-index: 1000 !important;
 }
 
 .modern-price-pin.active .pill-badge {
-  background: #064e3b;
+  background: rgb(var(--brand-900));
   border-color: #fde047;
   box-shadow: 0 0 0 2px rgba(253, 224, 71, 0.45), 0 4px 10px rgba(0, 0, 0, 0.35);
 }
 
 .modern-price-pin.active .pin-tip {
-  border-top-color: #064e3b;
+  border-top-color: rgb(var(--brand-900));
 }
 
 /* Saudi Aqar Style Green Pin Marker (Backwards Compatibility) */
 .saudi-aqar-marker {
   position: relative;
-  background-color: #047857;
+  background-color: rgb(var(--brand-800));
   color: white;
   font-weight: 800;
   font-size: 11px;
@@ -286,20 +286,20 @@ button, a, input, select, textarea {
   transform: translateX(-50%);
   border-width: 5.5px 4.5px 0;
   border-style: solid;
-  border-color: #047857 transparent transparent;
+  border-color: rgb(var(--brand-800)) transparent transparent;
   display: block;
   width: 0;
 }
 .saudi-aqar-marker:hover,
 .saudi-aqar-marker.active {
-  background-color: #064e3b;
+  background-color: rgb(var(--brand-900));
   border-color: #fde047;
   transform: scale(1.15) translateY(-3px);
-  box-shadow: 0 8px 16px rgba(4, 120, 87, 0.45);
+  box-shadow: 0 8px 16px rgb(var(--brand-800) / 45%);
   z-index: 1000 !important;
 }
 .saudi-aqar-marker.active::after {
-  border-color: #064e3b transparent transparent;
+  border-color: rgb(var(--brand-900)) transparent transparent;
 }
 
 /* Custom Price Badge Map Marker */
@@ -307,7 +307,7 @@ button, a, input, select, textarea {
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #0f766e;
+  background-color: rgb(var(--brand-700));
   color: white;
   font-weight: 700;
   font-size: 0.75rem;
@@ -356,13 +356,13 @@ button, a, input, select, textarea {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #0f766e, #042f2e);
+  background: linear-gradient(135deg, rgb(var(--brand-700)), rgb(var(--brand-950)));
   color: white;
   border-radius: 50%;
   font-weight: 800;
   font-size: 0.875rem;
   border: 3px solid white;
-  box-shadow: 0 10px 15px -3px rgba(15, 118, 110, 0.4);
+  box-shadow: 0 10px 15px -3px rgb(var(--brand-700) / 40%);
   cursor: pointer;
   transition: transform 0.2s;
 }

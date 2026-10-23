@@ -7,13 +7,31 @@ import { useRouter } from "next/navigation";
 import { DEFAULT_BRAND_LOGO_PATH, DEFAULT_VISUAL_IDENTITY, getBrandLogoHeightPx } from "@/lib/brand-theme";
 import type { CmsHomepageSettings } from "@/lib/db/types";
 import {
+  Building2,
+  Compass,
+  Crown,
+  Home,
   LogOut,
+  MapPin,
   ExternalLink,
+  Layers,
+  Shield,
+  Sparkles,
 } from "lucide-react";
 
 export default function AdminNav() {
   const router = useRouter();
   const [visualIdentity, setVisualIdentity] = useState(DEFAULT_VISUAL_IDENTITY);
+  const BrandIcon = {
+    building: Building2,
+    map_pin: MapPin,
+    sparkles: Sparkles,
+    compass: Compass,
+    shield: Shield,
+    home: Home,
+    crown: Crown,
+    layers: Layers,
+  }[visualIdentity.logoIcon];
 
   const loadVisualIdentity = useCallback(async () => {
     const response = await fetch("/api/cms/homepage", { cache: "no-store" });
@@ -59,15 +77,24 @@ export default function AdminNav() {
         >
           {/* Brand */}
           <div className="flex items-center gap-3">
-            <NextImage
-              src={visualIdentity.logoImageUrl || DEFAULT_BRAND_LOGO_PATH}
-              alt={visualIdentity.siteName || "دار العقار"}
-              width={96}
-              height={50}
-              unoptimized
-              style={{ height: `${getBrandLogoHeightPx(visualIdentity)}px`, width: "auto" }}
-              className="rounded-lg bg-white object-contain"
-            />
+            {visualIdentity.logoType === "image" ? (
+              <NextImage
+                src={visualIdentity.logoImageUrl || DEFAULT_BRAND_LOGO_PATH}
+                alt={visualIdentity.siteName || "دار العقار"}
+                width={96}
+                height={50}
+                unoptimized
+                style={{ height: `${getBrandLogoHeightPx(visualIdentity)}px`, width: "auto" }}
+                className="rounded-lg bg-white object-contain"
+              />
+            ) : visualIdentity.logoType === "icon_text" ? (
+              <span
+                className="flex h-11 w-11 items-center justify-center rounded-xl text-white"
+                style={{ backgroundColor: visualIdentity.primaryColor }}
+              >
+                <BrandIcon className="h-5 w-5" />
+              </span>
+            ) : null}
             <div>
               <div className="flex items-center gap-2">
                 <span className="font-black text-sm tracking-tight text-white">

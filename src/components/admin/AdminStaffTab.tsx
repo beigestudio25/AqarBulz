@@ -131,6 +131,13 @@ const AVAILABLE_PERMISSIONS = [
     color: "text-yellow-500",
   },
   {
+    id: "clients.manage",
+    label: "إدارة العملاء والوسطاء",
+    description: "إدارة بيانات العملاء ومعايير العقارات المطلوبة وعروض الوسطاء",
+    icon: Users,
+    color: "text-cyan-600",
+  },
+  {
     id: "staff.manage",
     label: "إدارة موظفي الشركة",
     description: "إنشاء حسابات إدارية جديدة وتعديل صلاحيات الموظفين",

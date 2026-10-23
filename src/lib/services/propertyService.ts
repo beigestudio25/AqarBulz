@@ -62,6 +62,8 @@ interface SupabasePropertyRow {
   updated_at: string;
   published_at?: string | null;
   property_images?: { url: string; alt: string; is_main: boolean; sort_order: number }[];
+  images?: string[] | null;
+  amenities?: string[] | null;
   profiles?: {
     name: string;
     role: string;
@@ -78,7 +80,9 @@ interface SupabasePropertyRow {
  */
 export function mapSupabaseRowToProperty(row: any): Property {
   let images: string[] = [];
-  if (row.property_images && row.property_images.length > 0) {
+  if (Array.isArray(row.images)) {
+    images = row.images.filter((image: unknown): image is string => typeof image === "string");
+  } else if (row.property_images && row.property_images.length > 0) {
     images = [...row.property_images]
       .sort((a, b) => (b.is_main ? 1 : 0) - (a.is_main ? 1 : 0) || a.sort_order - b.sort_order)
       .map((img: any) => img.url);
@@ -111,7 +115,9 @@ export function mapSupabaseRowToProperty(row: any): Property {
     parkingSpots: row.parking_spots ?? undefined,
     hasElevator: row.has_elevator ?? undefined,
     yearBuilt: row.year_built ?? undefined,
-    amenities: [],
+    amenities: Array.isArray(row.amenities)
+      ? row.amenities.filter((amenity: unknown): amenity is string => typeof amenity === "string")
+      : [],
     images,
     cityId: row.city_id,
     districtId: row.district_id,
@@ -169,7 +175,9 @@ export function mapRowToPublicProperty(
 
   // Extract images
   let images: string[] = [];
-  if (row.property_images && row.property_images.length > 0) {
+  if (Array.isArray(row.images)) {
+    images = row.images.filter((image: unknown): image is string => typeof image === "string");
+  } else if (row.property_images && row.property_images.length > 0) {
     images = [...row.property_images]
       .sort((a, b) => (b.is_main ? 1 : 0) - (a.is_main ? 1 : 0) || a.sort_order - b.sort_order)
       .map((img) => img.url);
@@ -213,7 +221,7 @@ export function mapRowToPublicProperty(
     isApproximateLocation: isApproximate,
     privacyRadiusMeters: isApproximate ? APPROXIMATE_LOCATION_RADIUS_METERS : undefined,
     images,
-    amenities: [],
+    amenities: Array.isArray(row.amenities) ? row.amenities : [],
     status: row.status as any,
     featured: Boolean(row.featured),
     viewsCount: row.views_count || 0,

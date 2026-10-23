@@ -330,7 +330,7 @@ export default function MobileBottomNav() {
             </Link>
             )}
 
-            {/* 4. الهوية والمحتوى */}
+            {/* 4. الهوية البصرية */}
             {canAccessAdminSection(user, "cms") && (
             <Link
               href="/admin?tab=cms"
@@ -352,7 +352,7 @@ export default function MobileBottomNav() {
                 )}
               </div>
               <span className="text-[10px] tracking-tight mt-1 font-bold">
-                المحتوى
+                الهوية
               </span>
             </Link>
             )}

@@ -114,9 +114,17 @@ test("CMS settings and pages persist through the central settings table", async 
           primaryHoverColor: "#234567",
           secondaryColor: "#345678",
           accentColor: "#abcdef",
+          logoType: "icon_text",
+          logoIcon: "crown",
+          logoImageUrl: "/branding/custom-logo.png",
           logoHeightPx: 64,
+          appIconUrl: "https://example.com/app-icon.png",
+          faviconUrl: "/branding/favicon.png",
           colorSchemePreset: "custom",
+          fontFamily: "ibm_plex",
           headingWeight: "extrabold",
+          borderRadius: "soft",
+          headerBackground: "dark",
         },
         navLabels: {
           propertiesDropdown: "كل العقارات",
@@ -129,8 +137,17 @@ test("CMS settings and pages persist through the central settings table", async 
     assert.equal(updatedHomepage.visualIdentity?.primaryHoverColor, "#234567");
     assert.equal(updatedHomepage.visualIdentity?.secondaryColor, "#345678");
     assert.equal(updatedHomepage.visualIdentity?.accentColor, "#abcdef");
+    assert.equal(updatedHomepage.visualIdentity?.logoType, "icon_text");
+    assert.equal(updatedHomepage.visualIdentity?.logoIcon, "crown");
+    assert.equal(updatedHomepage.visualIdentity?.logoImageUrl, "/branding/custom-logo.png");
     assert.equal(updatedHomepage.visualIdentity?.logoHeightPx, 64);
+    assert.equal(updatedHomepage.visualIdentity?.appIconUrl, "https://example.com/app-icon.png");
+    assert.equal(updatedHomepage.visualIdentity?.faviconUrl, "/branding/favicon.png");
+    assert.equal(updatedHomepage.visualIdentity?.colorSchemePreset, "custom");
+    assert.equal(updatedHomepage.visualIdentity?.fontFamily, "ibm_plex");
     assert.equal(updatedHomepage.visualIdentity?.headingWeight, "extrabold");
+    assert.equal(updatedHomepage.visualIdentity?.borderRadius, "soft");
+    assert.equal(updatedHomepage.visualIdentity?.headerBackground, "dark");
     assert.equal(updatedHomepage.navLabels?.propertiesDropdown, "كل العقارات");
     assert.equal(updatedHomepage.navLabels?.smartMatch, "الاختيار الذكي");
     assert.equal(

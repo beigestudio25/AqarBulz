@@ -44,6 +44,10 @@ const FONT_FAMILIES: Record<VisualIdentitySettings["fontFamily"], string> = {
   ibm_plex: "'IBM Plex Sans Arabic', sans-serif",
 };
 
+export function getBrandFontFamily(fontFamily?: VisualIdentitySettings["fontFamily"]): string {
+  return FONT_FAMILIES[fontFamily || "cairo"];
+}
+
 const BLEND_WITH_WHITE: Record<number, number> = {
   50: 0.94,
   100: 0.86,
@@ -100,7 +104,7 @@ export function getBrandThemeStyle(identity?: VisualIdentitySettings): CSSProper
   ["sm", "md", "lg", "xl", "2xl", "3xl"].forEach((key, index) => {
     variables[`--radius-${key}`] = `${radiusScale[index]}px`;
   });
-  variables["--font-cairo"] = FONT_FAMILIES[identity?.fontFamily || "cairo"];
+  variables["--font-cairo"] = getBrandFontFamily(identity?.fontFamily);
 
   return variables as CSSProperties;
 }

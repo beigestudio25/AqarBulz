@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import AdminProjectsTab from "@/components/admin/AdminProjectsTab";
 import AdminMessagesTab from "@/components/admin/AdminMessagesTab";
-import AdminCmsTab from "@/components/admin/AdminCmsTab";
+import AdminIdentityPage from "@/components/admin/AdminIdentityPage";
 import AdminSupportTab from "@/components/admin/AdminSupportTab";
 import AdminStaffTab from "@/components/admin/AdminStaffTab";
 import AdminRatingsTab from "@/components/admin/AdminRatingsTab";
@@ -26,6 +26,7 @@ import {
   Star,
   Loader2,
   ExternalLink,
+  FileText,
   ChevronLeft,
   Workflow,
 } from "lucide-react";
@@ -70,8 +71,8 @@ const TAB_ITEMS: Array<{
   },
   {
     id: "cms",
-    label: "المحتوى والهوية",
-    sublabel: "إدارة محتوى المنصة وهويتها البصرية",
+    label: "الهوية البصرية",
+    sublabel: "تخصيص الشعار والألوان والخطوط وتفعيلها",
     icon: Palette,
     activeBg: "bg-purple-500/10",
     activeText: "text-purple-600",
@@ -174,6 +175,24 @@ function AdminDashboardContent() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {canAccessAdminSection(currentUser, "cms") && (
+              <Link
+                href="/admin/content"
+                className="inline-flex items-center gap-2 rounded-xl bg-brand-700 px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-brand-800"
+              >
+                <FileText className="h-3.5 w-3.5" />
+                <span>محتوى الموقع</span>
+              </Link>
+            )}
+            {hasAdminPermission(currentUser, "clients.manage") && (
+              <Link
+                href="/admin/clients"
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-50"
+              >
+                <Users className="h-3.5 w-3.5" />
+                <span>العملاء والوسطاء</span>
+              </Link>
+            )}
             <Link
               href="/admin/architecture"
               className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-50"
@@ -292,7 +311,7 @@ function AdminDashboardContent() {
             {activeTab === "messages" && canAccessAdminSection(currentUser, "messages") && (
               <AdminMessagesTab canViewUserProfiles={hasAdminPermission(currentUser, "staff.manage")} />
             )}
-            {activeTab === "cms" && canAccessAdminSection(currentUser, "cms") && <AdminCmsTab />}
+            {activeTab === "cms" && canAccessAdminSection(currentUser, "cms") && <AdminIdentityPage />}
             {activeTab === "support" && canAccessAdminSection(currentUser, "support") && <AdminSupportTab />}
             {activeTab === "ratings" && canAccessAdminSection(currentUser, "ratings") && <AdminRatingsTab />}
             {activeTab === "staff" && canAccessAdminSection(currentUser, "staff") && <AdminStaffTab />}
